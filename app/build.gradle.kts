@@ -16,6 +16,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_shared", "-DANDROID_CPP_FEATURES=rtti exceptions")
+            }
+        }
     }
 
     buildTypes {
@@ -36,6 +41,20 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    // Agregado para Node.js Mobile
+    externalNativeBuild {
+        cmake {
+            path = file("CMakeLists.txt")
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+    packagingOptions {
+        pickFirst("lib/**/libc++_shared.so")
     }
 }
 
