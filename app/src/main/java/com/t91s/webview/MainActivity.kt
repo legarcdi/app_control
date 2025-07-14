@@ -10,8 +10,16 @@ import android.content.res.AssetManager
 import java.io.File
 import java.io.FileOutputStream
 import android.util.Log
+import android.webkit.JavascriptInterface
+import android.widget.Toast
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
+import android.webkit.WebChromeClient
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     companion object {
         init {
@@ -53,9 +61,76 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val REQUEST_BLUETOOTH_CONNECT = 1001
+    private var pendingPrinterName: String? = null
+
+    // Bridge para exponer impresión Bluetooth a JavaScript
+    inner class JsBridge {
+        @JavascriptInterface
+        fun printBluetooth(printerName: String?) {
+            Log.i("AndroidBridge", "[AndroidBridge] printBluetooth llamado desde JS con printerName: $printerName")
+            runOnUiThread {
+                if (ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.i("AndroidBridge", "[AndroidBridge] Solicitando permiso BLUETOOTH_CONNECT")
+                    ActivityCompat.requestPermissions(
+                        this@MainActivity,
+                        arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                        REQUEST_BLUETOOTH_CONNECT
+                    )
+                    pendingPrinterName = printerName
+                } else {
+                    Log.i("AndroidBridge", "[AndroidBridge] Permiso BLUETOOTH_CONNECT concedido, llamando a doBluetoothPrint")
+                    doBluetoothPrint(printerName)
+                }
+            }
+        }
+    }
+
+    private fun doBluetoothPrint(printerName: String?) {
+        Log.i("AndroidBridge", "[AndroidBridge] doBluetoothPrint llamado con printerName: $printerName")
+        val helper = BluetoothPrinterHelper(this@MainActivity)
+        Thread {
+            val (ok, usedPrinterName) = helper.printFile(printerName)
+            runOnUiThread {
+                val msg = if (ok) {
+                    "Impresión Bluetooth enviada a: ${usedPrinterName ?: "(desconocida)"}"
+                } else {
+                    "Error al imprimir por Bluetooth${if (usedPrinterName != null) ": $usedPrinterName" else ""}"
+                }
+                Toast.makeText(
+                    this@MainActivity,
+                    msg,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }.start()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_BLUETOOTH_CONNECT) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                doBluetoothPrint(pendingPrinterName)
+            } else {
+                Toast.makeText(this, "Permiso Bluetooth denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Habilitar debug remoto para WebView
+        android.webkit.WebView.setWebContentsDebuggingEnabled(true)
 
         // Copiar nodejs-project de assets a filesDir si no existe
         val nodeDir = File(filesDir, "nodejs-project")
@@ -83,6 +158,14 @@ class MainActivity : ComponentActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
         }
         webView.webViewClient = WebViewClient()
+        // Agregar WebChromeClient para redirigir console.log a Logcat
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                Log.d("WebViewConsole", "${message.message()} -- Línea: ${message.lineNumber()} (${message.sourceId()})")
+                return true
+            }
+        }
+        webView.addJavascriptInterface(JsBridge(), "AndroidBridge")
         //webView.loadUrl("https://t91s.adcotec.com.mx")
         webView.loadUrl("https://app.adcotec.com.mx")
     }

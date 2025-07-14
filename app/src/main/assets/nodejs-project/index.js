@@ -56,26 +56,37 @@ app.use(cors());
 async function printPedido(pedido) {
   try {
     const cuerpo = pedido.body;
+    // Validaciones y logs
+    console.log('Body recibido en printPedido:', JSON.stringify(cuerpo, null, 2));
+    if (!cuerpo) throw new Error('No se recibió el cuerpo del pedido');
+
+    // Validar arrays
+    const first_lines = Array.isArray(cuerpo.first_lines) ? cuerpo.first_lines : [];
+    const last_lines = Array.isArray(cuerpo.last_lines) ? cuerpo.last_lines : [];
+    const productos = Array.isArray(cuerpo.productos) ? cuerpo.productos : [];
+    const datos_ped = Array.isArray(cuerpo.datos_ped) ? cuerpo.datos_ped : [{}];
+
     const imagen = cuerpo.imagen;
     const tipo_impresora = cuerpo.tipo_impresora;
     const num_impresiones = cuerpo.num_copias;
 
+    console.log('Tipo de impresora recibido:', tipo_impresora);
     const template = `{image:${imagen}}\n
-    ${cuerpo.first_lines.join('\n')}
+    ${first_lines.join('\n')}
     {width:*,15}
-    Pedido  | "${cuerpo.datos_ped[0].folio}"
-    ${cuerpo.datos_ped[0].fecha}   |
-    ${cuerpo.datos_ped[0].estado}   |
+    Pedido  | "${datos_ped[0].folio || ''}"
+    ${datos_ped[0].fecha || ''}   |
+    ${datos_ped[0].estado || ''}   |
     {width:*,20}
-    Produce: ${cuerpo.datos_ped[0].produce} | Entrega: ${cuerpo.datos_ped[0].entrega}
+    Produce: ${datos_ped[0].produce || ''} | Entrega: ${datos_ped[0].entrega || ''}
     {width:*,1}
-    Captura: ${cuerpo.datos_ped[0].captura} |
-    Cliente: ${cuerpo.datos_ped[0].cliente} |
-    Dirección: ${cuerpo.datos_ped[0].direccion} |
-    Comentarios: "${cuerpo.datos_ped[0].comentarios}" |
+    Captura: ${datos_ped[0].captura || ''} |
+    Cliente: ${datos_ped[0].cliente || ''} |
+    Dirección: ${datos_ped[0].direccion || ''} |
+    Comentarios: "${datos_ped[0].comentarios || ''}" |
     {border:space; width:6,*,8,8}
     "Cant." |"Producto" |"Precio"|"Total"
-    ${cuerpo.productos.map(producto => {
+    ${productos.map(producto => {
       let linea = `${producto.cantidad} |${producto.nombre} | ${producto.p_unit}| ${producto.total}`;
       if (producto.descuento > 0) {
         linea += `\n  "" |Dto.: ${producto.descuento}`;
@@ -84,9 +95,9 @@ async function printPedido(pedido) {
     }).join('\n')}
     -------------------------------------
     {width:*,20}
-    "TOTAL"             |          "${cuerpo.datos_ped[0].total_nota}"
+    "TOTAL"             |          "${datos_ped[0].total_nota || ''}"
     {width:48}
-    ${cuerpo.last_lines.join('\n')}
+    ${last_lines.join('\n')}
     `;
 
     const printerOptions = {
@@ -99,6 +110,7 @@ async function printPedido(pedido) {
     const receipt = Buffer.from(receiptline.transform(template, printerOptions), 'binary');
 
     if (tipo_impresora === "usb") {
+      console.log("Entrando a impresión USB");
       const device = new escpos.USB();
       const printer = new escpos.Printer(device);
 
@@ -109,6 +121,7 @@ async function printPedido(pedido) {
         printer.close();
       });
     } else if (tipo_impresora === "red") {
+      console.log("Entrando a impresión RED");
       const PRINTER_IP = cuerpo.ip_impresora;
       const PRINTER_PORT = 9100;
       const client = new net.Socket();
@@ -118,8 +131,34 @@ async function printPedido(pedido) {
         }
         client.end();
       });
+    } else if (tipo_impresora === "bluetooth") {
+      console.log("Entrando a impresión BLUETOOTH");
+      // Guardar el recibo en un archivo para que Android lo imprima por Bluetooth
+      const storagePath = process.env.NODEJS_MOBILE_APP_STORAGE_PATH || __dirname;
+      const printDir = storagePath; // Corregido: ya es .../files/nodejs-project
+      const printPath = path.join(printDir, 'print_bt.txt');
+      try {
+        // Asegúrate de crear el directorio si no existe
+        fs.mkdirSync(printDir, { recursive: true });
+        console.log('Intentando escribir print_bt.txt en:', printPath);
+        console.log('Contenido a escribir (bytes):', receipt.length);
+        fs.writeFileSync(printPath, receipt);
+        console.log('fs.writeFileSync ejecutado');
+        // Validar que el archivo existe y tiene contenido
+        if (fs.existsSync(printPath)) {
+          const stats = fs.statSync(printPath);
+          console.log(`Archivo para impresión Bluetooth generado: ${printPath} (${stats.size} bytes)`);
+          // Listar archivos en el directorio para depuración
+          const files = fs.readdirSync(path.dirname(printPath));
+          console.log('Archivos en el directorio:', files);
+        } else {
+          console.error('Error: print_bt.txt no se creó correctamente en', printPath);
+        }
+      } catch (err) {
+        console.error('Error escribiendo print_bt.txt:', err);
+      }
     } else {
-      console.log("Tipo de impresora desconocida.");
+      console.log("Tipo de impresora desconocido:", tipo_impresora);
     }
   } catch (error) {
     console.error('Error al imprimir:', error);
@@ -132,6 +171,8 @@ async function printRemision(remision) {
     const imagen = cuerpo.imagen;
     const tipo_impresora = cuerpo.tipo_impresora
     const num_impresiones = cuerpo.num_copias;
+
+    console.log('Tipo de impresora recibido:', tipo_impresora);
     // Ejemplo de nota de venta
     const template = `{image:${imagen}}\n
 ${cuerpo.first_lines.join('\n')}
@@ -171,8 +212,8 @@ ${cuerpo.last_lines.join('\n')}
   };
 const receipt = Buffer.from(receiptline.transform(template, printerOptions), 'binary');
             if (tipo_impresora === "usb") {
+              console.log("Entrando a impresión USB");
               try {
-                    console.log("La impresora es de tipo USB.");
                     //USB
                     // Enviar comandos a la impresora USB
                     const device = new escpos.USB(); // Usar dispositivo USB // El constructor buscará automáticamente la primera impresora compatible
@@ -197,7 +238,7 @@ const receipt = Buffer.from(receiptline.transform(template, printerOptions), 'bi
                 }
               //FIN USB
             } else if (tipo_impresora === "red") {
-            console.log("La impresora es de tipo IP.");
+            console.log("Entrando a impresión RED");
             //IP
                 const PRINTER_IP = cuerpo.ip_impresora; // Cambia esto por la IP de tu impresora
                 //const PRINTER_IP = '192.168.1.250'; // Cambia esto por la IP de tu impresora
@@ -221,6 +262,29 @@ const receipt = Buffer.from(receiptline.transform(template, printerOptions), 'bi
                     console.log('Conexión con la impresora cerrada.');
                 });
             //FIN IP
+            } else if (tipo_impresora === "bluetooth") {
+              console.log("Entrando a impresión BLUETOOTH");
+              // Guardar el recibo en un archivo para que Android lo imprima por Bluetooth
+              const storagePath = process.env.NODEJS_MOBILE_APP_STORAGE_PATH || __dirname;
+              const printDir = storagePath; // Corregido: ya es .../files/nodejs-project
+              const printPath = path.join(printDir, 'print_bt.txt');
+              try {
+                fs.mkdirSync(printDir, { recursive: true });
+                console.log('Intentando escribir print_bt.txt en:', printPath);
+                console.log('Contenido a escribir (bytes):', receipt.length);
+                fs.writeFileSync(printPath, receipt);
+                console.log('fs.writeFileSync ejecutado');
+                if (fs.existsSync(printPath)) {
+                  const stats = fs.statSync(printPath);
+                  console.log(`Archivo para impresión Bluetooth generado: ${printPath} (${stats.size} bytes)`);
+                  const files = fs.readdirSync(path.dirname(printPath));
+                  console.log('Archivos en el directorio:', files);
+                } else {
+                  console.error('Error: print_bt.txt no se creó correctamente en', printPath);
+                }
+              } catch (err) {
+                console.error('Error escribiendo print_bt.txt:', err);
+              }
             } else {
             console.log("Tipo de impresora desconocida.");
             }
@@ -267,6 +331,8 @@ app.post('/print_pedido', (req, res) => {
 
 // Nuevo endpoint '/print' para manejar las ventas
 app.post('/print', (req, res) => {
+  console.log('=== [Node.js] POST /print recibido ===');
+  console.log('[Node.js] Body recibido en /print:', JSON.stringify(req.body, null, 2));
   // Cola de solicitudes
   let printQueueVentas = [];
   let isPrintingVenta = false;
@@ -293,7 +359,18 @@ app.post('/print', (req, res) => {
   const remision = req.body;
   printQueueVentas.push({ body: remision });
   res.json({ message: 'Nota de venta agregada a la cola de impresión.' });
+  console.log('[Node.js] Nota de venta agregada a la cola de impresión.');
   processQueueVenta(); // Iniciar el procesamiento de la cola
+});
+
+// Endpoint de depuración para listar archivos en el directorio del proyecto
+app.get('/debug-list-files', (req, res) => {
+  try {
+    const files = fs.readdirSync(__dirname);
+    res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.toString() });
+  }
 });
 
 app.listen(port, '0.0.0.0', () => {
