@@ -92,17 +92,33 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getPairedBluetoothPrinters(): String {
+            if (ContextCompat.checkSelfPermission(
+                    this@MainActivity,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this@MainActivity,
+                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                    REQUEST_BLUETOOTH_CONNECT
+                )
+                return "[]"
+            }
             val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
             val pairedDevices = bluetoothAdapter?.bondedDevices
             val printers = pairedDevices?.map {
                 mapOf("name" to it.name, "mac" to it.address)
             } ?: emptyList()
             return try {
-                // Usa Gson para serializar a JSON
                 com.google.gson.Gson().toJson(printers)
             } catch (e: Exception) {
                 "[]"
             }
+        }
+
+        @JavascriptInterface
+        fun testReturn(): String {
+            return "hola desde android"
         }
     }
 
