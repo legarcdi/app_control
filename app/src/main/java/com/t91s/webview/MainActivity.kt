@@ -63,12 +63,13 @@ class MainActivity : AppCompatActivity() {
 
     private val REQUEST_BLUETOOTH_CONNECT = 1001
     private var pendingPrinterName: String? = null
+    private var pendingPrinterMac: String? = null
 
     // Bridge para exponer impresión Bluetooth a JavaScript
     inner class JsBridge {
         @JavascriptInterface
-        fun printBluetooth(printerName: String?) {
-            Log.i("AndroidBridge", "[AndroidBridge] printBluetooth llamado desde JS con printerName: $printerName")
+        fun printBluetooth(printerMac: String?) {
+            Log.i("AndroidBridge", "[AndroidBridge] printBluetooth llamado desde JS con printerMac: $printerMac")
             runOnUiThread {
                 if (ContextCompat.checkSelfPermission(
                         this@MainActivity,
@@ -81,30 +82,46 @@ class MainActivity : AppCompatActivity() {
                         arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
                         REQUEST_BLUETOOTH_CONNECT
                     )
-                    pendingPrinterName = printerName
+                    pendingPrinterMac = printerMac
                 } else {
                     Log.i("AndroidBridge", "[AndroidBridge] Permiso BLUETOOTH_CONNECT concedido, llamando a doBluetoothPrint")
-                    doBluetoothPrint(printerName)
+                    doBluetoothPrint(printerMac)
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun getPairedBluetoothPrinters(): String {
+            val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+            val pairedDevices = bluetoothAdapter?.bondedDevices
+            val printers = pairedDevices?.map {
+                mapOf("name" to it.name, "mac" to it.address)
+            } ?: emptyList()
+            return try {
+                // Usa Gson para serializar a JSON
+                com.google.gson.Gson().toJson(printers)
+            } catch (e: Exception) {
+                "[]"
             }
         }
     }
 
-    private fun doBluetoothPrint(printerName: String?) {
-        Log.i("AndroidBridge", "[AndroidBridge] doBluetoothPrint llamado con printerName: $printerName")
+    private fun doBluetoothPrint(printerMac: String?) {
+        Log.i("AndroidBridge", "[AndroidBridge] doBluetoothPrint llamado con printerMac: $printerMac")
         val helper = BluetoothPrinterHelper(this@MainActivity)
         Thread {
-            val (ok, usedPrinterName) = helper.printFile(printerName)
+            val (ok, usedPrinterName, errorMsg) = helper.printFile(printerMac)
+            Log.i("AndroidBridge", "[AndroidBridge] Resultado de printFile: ok=$ok, usedPrinterName=$usedPrinterName, errorMsg=$errorMsg")
             runOnUiThread {
                 val msg = if (ok) {
                     "Impresión Bluetooth enviada a: ${usedPrinterName ?: "(desconocida)"}"
                 } else {
-                    "Error al imprimir por Bluetooth${if (usedPrinterName != null) ": $usedPrinterName" else ""}"
+                    "Error al imprimir por Bluetooth${if (usedPrinterName != null) ": $usedPrinterName" else ""}${if (!errorMsg.isNullOrBlank()) "\n$errorMsg" else ""}"
                 }
                 Toast.makeText(
                     this@MainActivity,
                     msg,
-                    Toast.LENGTH_SHORT
+                    Toast.LENGTH_LONG
                 ).show()
             }
         }.start()
@@ -118,7 +135,7 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_BLUETOOTH_CONNECT) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                doBluetoothPrint(pendingPrinterName)
+                doBluetoothPrint(pendingPrinterMac)
             } else {
                 Toast.makeText(this, "Permiso Bluetooth denegado", Toast.LENGTH_SHORT).show()
             }
