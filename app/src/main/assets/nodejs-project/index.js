@@ -71,40 +71,45 @@ async function printPedido(pedido) {
     const num_impresiones = cuerpo.num_copias;
 
     console.log('Tipo de impresora recibido:', tipo_impresora);
-    // const template = `{image:${imagen}}\n
-    //cambiar por la linea de arriba si falla la fuente pequeña
-    const template = `{command:\x1b\x4d\x01}\n{image:${imagen}}\n${first_lines.join('\n')}
-{width:*,15}
-Pedido  | "${datos_ped[0].folio || ''}"
-{width:*,1}
-${datos_ped[0].fecha || ''}   |
-{width:*,1}
-${datos_ped[0].estado || ''}   |
-{width:*,20}
-Produce: ${datos_ped[0].produce || ''} | Entrega: ${datos_ped[0].entrega || ''}
-{width:*,1}
-Captura: ${datos_ped[0].captura || ''} |
-{width:*,1}
-Cliente: ${datos_ped[0].cliente || ''} |
-{width:*,1}
-Dirección: ${datos_ped[0].direccion || ''} |
-{width:*,1}
-Comentarios: "${datos_ped[0].comentarios || ''}" |
-{border:space; width:6,*,8,8}
-"Cant." |"Producto" |"Precio"|"Total"
-${productos.map(producto => {
-  let linea = `${producto.cantidad} |${producto.nombre} | ${producto.p_unit}| ${producto.total}`;
-  if (producto.descuento > 0) {
-    linea += `\n  "" |Dto.: ${producto.descuento}`;
-  }
-  return linea;
-}).join('\n')}
--------------------------------------
-{width:*,20}
-"TOTAL"             |          "${datos_ped[0].total_nota || ''}"
-{width:48}
-${last_lines.join('\n')}
-`;
+    const template = `{image:${imagen}}
+
+    ${first_lines.join('\n')}
+    {width:*,15}
+    Pedido  | "${datos_ped[0].folio || ''}"
+    {width:30,*}
+    ${datos_ped[0].fecha || ''}   |
+    {width:30,*}
+    ${datos_ped[0].estado || ''}   |
+    {width:*,20}
+    Produce: ${datos_ped[0].produce || ''} | Entrega: ${datos_ped[0].entrega || ''}
+    {width:*,1}
+    Captura: ${datos_ped[0].captura || ''} |
+    Cliente: ${datos_ped[0].cliente || ''} |
+    Dirección: ${datos_ped[0].direccion || ''} |
+    Comentarios: "${datos_ped[0].comentarios || ''}" |
+    ${cuerpo.num_car === 32
+      ? `{border:space; width:30,*}\n"Productos" |" "\n` + cuerpo.productos.map(producto => {
+          let nombre = producto.nombre.length > 31 ? producto.nombre.slice(0, 30) + '…' : producto.nombre;
+          let linea1 = `{width:31,*}\n${nombre} |`;
+          let linea2 = `{width:20,*}\n${producto.cantidad} x $${producto.p_unit} | $${producto.total}`;
+          let descuento = producto.descuento > 0 ? `Dto.: ${producto.descuento} | ` : '';
+          return [linea1, linea2, descuento].filter(Boolean).join('\n');
+        }).join('\n')
+      : `{border:space; width:6,*,8,8}\n"Cant." |"Producto" |"Precio"|"Total"\n` +
+        cuerpo.productos.map(producto => {
+          let linea = `${producto.cantidad} |${producto.nombre} | $${producto.p_unit}| $${producto.total}`;
+          if (producto.descuento > 0) {
+            linea += `\n  "" |Dto.: $${producto.descuento}`;
+          }
+          return linea;
+        }).join('\n')
+    }
+    -------------------------------------
+    {width:*,20}
+    "TOTAL"             |          "${datos_ped[0].total_nota || ''}"
+    {width:48}
+    ${last_lines.join('\n')}
+    `;
 
     const printerOptions = {
       "cpl": cuerpo.num_car,
@@ -180,25 +185,36 @@ async function printRemision(remision) {
 
     console.log('Tipo de impresora recibido:', tipo_impresora);
     // Ejemplo de nota de venta
-    // const template = `{image:${imagen}}\n
-    //cambiar por la linea de arriba si falla la fuente pequeña
-    const template = `{command:\x1b\x4d\x01}\n{image:${imagen}}\n${cuerpo.first_lines.join('\n')}
+    const template = `{image:${imagen}}\n
+${cuerpo.first_lines.join('\n')}
 {width:*,15}
 Venta ${cuerpo.datos_rem[0].tipo_venta} | "${cuerpo.datos_rem[0].folio}"
-{width:*,1}
-${cuerpo.datos_rem[0].fecha}   |
-{width:*,1}
+{width:30,*}
+${cuerpo.datos_rem[0].fecha}   | ""
+{width:30,1}
 Vendedor: ${cuerpo.datos_rem[0].vendedor} |
 Cliente: ${cuerpo.datos_rem[0].cliente} |
-{border:space; width:6,*,8,8}
-"Cant." |"Producto" |"Precio"|"Total"
-${cuerpo.productos.map(producto => {
-  let linea = `${producto.cantidad} |${producto.nombre} | ${producto.p_unit}| ${producto.total}`;
-  if (producto.descuento > 0) {
-    linea += `\n  "" |Dto.: ${producto.descuento}`;
-  }
-  return linea;
-}).join('\n')}
+${cuerpo.num_car === 32
+  ? `{border:space; width:30,*}\n"Productos" |" "\n` + cuerpo.productos.map(producto => {
+      // Línea 1: nombre del producto (truncado a 31)
+      let nombre = producto.nombre.length > 31 ? producto.nombre.slice(0, 30) + '…' : producto.nombre;
+      let linea1 = `{width:31,*}\n${nombre} |`;
+      // Línea 2: cantidad x precio | total
+      let linea2 = `{width:20,*}\n${producto.cantidad} x $${producto.p_unit} | $${producto.total}`;
+      // Línea 3: descuento si aplica
+      let descuento = producto.descuento > 0 ? `Dto.: ${producto.descuento} | ` : '';
+      // Devuelve las líneas separadas, y .join('\n') entre partidas
+      return [linea1, linea2, descuento].filter(Boolean).join('\n');
+    }).join('\n')
+  : `{border:space; width:6,*,8,8}\n"Cant." |"Producto" |"Precio"|"Total"\n` +
+    cuerpo.productos.map(producto => {
+      let linea = `${producto.cantidad} |${producto.nombre} | $${producto.p_unit}| $${producto.total}`;
+      if (producto.descuento > 0) {
+        linea += `\n  "" |Dto.: $${producto.descuento}`;
+      }
+      return linea;
+    }).join('\n')
+}
 -------------------------------------
 {width:*,20}
 "TOTAL"             |          "${cuerpo.datos_rem[0].total_nota}"

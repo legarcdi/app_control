@@ -64,15 +64,17 @@ class BluetoothPrinterHelper(private val context: Context) {
             Log.i(TAG, "Socket conectado, enviando datos...")
             val out = socket.outputStream
             val data = file.readBytes()
-            Log.i(TAG, "Bytes a enviar: ${data.size}")
+            Log.i(TAG, "Bytes a enviar: "+data.size)
             // Agrega salto de línea y comando de corte
             val cutCommand = byteArrayOf(0x1D, 0x56, 0x00) // ESC/POS cut
             out.write(data)
             out.write("\n".toByteArray()) // Solo un salto de línea
             out.write(cutCommand) // Comando de corte
             out.flush()
-            Log.i(TAG, "Datos enviados, esperando 300ms antes de cerrar el socket...")
-            Thread.sleep(300) // Espera 300 ms antes de cerrar el socket
+            // Delay dinámico según tamaño del ticket
+            val delayMs = 300 + (data.size / 1000) * 500 // 300ms base + 500ms por cada 1000 bytes
+            Log.i(TAG, "Datos enviados, esperando ${delayMs}ms antes de cerrar el socket...")
+            Thread.sleep(delayMs.toLong())
             Log.i(TAG, "Impresión Bluetooth enviada correctamente")
             file.delete() // Borra el archivo después de imprimir
             Log.i(TAG, "Archivo print_bt.txt eliminado tras imprimir")
