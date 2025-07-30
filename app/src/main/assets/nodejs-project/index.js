@@ -191,7 +191,7 @@ ${cuerpo.first_lines.join('\n')}
 Venta ${cuerpo.datos_rem[0].tipo_venta} | "${cuerpo.datos_rem[0].folio}"
 {width:30,*}
 ${cuerpo.datos_rem[0].fecha}   | ""
-{width:30,1}
+{width:*,1}
 Vendedor: ${cuerpo.datos_rem[0].vendedor} |
 Cliente: ${cuerpo.datos_rem[0].cliente} |
 ${cuerpo.num_car === 32
