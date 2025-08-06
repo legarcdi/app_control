@@ -72,6 +72,8 @@ dependencies {
     implementation(libs.androidx.material3)
     // Agregar Gson para serialización JSON
     implementation("com.google.code.gson:gson:2.10.1")
+    // Agregar OkHttp para descargas manuales
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
